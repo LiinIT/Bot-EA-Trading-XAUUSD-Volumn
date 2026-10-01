@@ -8,7 +8,7 @@
 *Tác giả & chủ sở hữu bản quyền mã nguồn trong repository này.*
 
 **scalping volumn of Khanh** <br>
-**Donate coffee:** <br>1907.5049.8560.17 (Techcombank)** <br> **68814062001 (Techcombank) !!! Thanks**
+**Donate coffee:** <br>1907.5049.8560.17 (Techcombank)* <br> **68814062001 (Techcombank) <br> !!! Thanks !!!**
 
 ☕ Nếu bot giúp bạn có lợi nhuận trên thị trường thì mời Khánh một ly cà phê nhé ☕
 
