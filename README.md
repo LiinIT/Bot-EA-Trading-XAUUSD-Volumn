@@ -7,7 +7,8 @@
 **© 2026 Hồ Ngọc Khánh ([@LiinIT](https://github.com/LiinIT)) — All rights reserved.**
 *Tác giả & chủ sở hữu bản quyền mã nguồn trong repository này.*
 
-**scalping volumn of Khanh - Donate coffee: 1907.5049.8560.17 (Techcombank) / 68814062001 (Techcombank) !!! Thanks**
+**scalping volumn of Khanh**
+**Donate coffee: 1907.5049.8560.17 (Techcombank) / 68814062001 (Techcombank) !!! Thanks**
 
 ☕ Nếu bot giúp bạn hiểu thị trường thêm một chút, mời Khánh một ly cà phê nhé ☕
 
