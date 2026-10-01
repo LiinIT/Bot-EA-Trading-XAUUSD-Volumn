@@ -7,10 +7,10 @@
 **© 2026 Hồ Ngọc Khánh ([@LiinIT](https://github.com/LiinIT)) — All rights reserved.**
 *Tác giả & chủ sở hữu bản quyền mã nguồn trong repository này.*
 
-**scalping volumn of Khanh**<br>
+**scalping volumn of Khanh** <br>
 **Donate coffee:** <br>1907.5049.8560.17 (Techcombank)** <br> **68814062001 (Techcombank) !!! Thanks**
 
-☕ Nếu bot giúp bạn hiểu thị trường thêm một chút, mời Khánh một ly cà phê nhé ☕
+☕ Nếu bot giúp bạn có lợi nhuận trên thị trường thì mời Khánh một ly cà phê nhé ☕
 
 ![MT5](https://img.shields.io/badge/MetaTrader-5-blue)
 ![TradingView](https://img.shields.io/badge/TradingView-Pine%20v6-green)
