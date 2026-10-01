@@ -1,0 +1,158 @@
+// Bot Volumn 2 — Force Peak + EMA 9/21 (TradingView Strategy)
+// © 2026 Hồ Ngọc Khánh (LiinIT). All rights reserved.
+// https://github.com/LiinIT/Bot-EA-Trading-XAUUSD-Volumn
+// Donate coffee: 1907.5049.8560.17 (Techcombank) / 68814062001 (Techcombank)
+//
+// Cùng logic với bản MT5 (mt5/BotVolumn2_ForcePeak_EMA.mq5):
+// tín hiệu tính trên nến ĐÃ ĐÓNG, lệnh khớp ở giá mở nến kế tiếp.
+
+//@version=6
+strategy("Bot Volumn 2 - Force Peak + EMA 9/21", shorttitle="BotVolumn2", overlay=true,
+     initial_capital=100, currency=currency.USD, pyramiding=0,
+     process_orders_on_close=false, calc_on_every_tick=false)
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// INPUTS
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+groupTrading = "Trading"
+lotSize      = input.float(0.01, "Lot Size", minval=0.0001, step=0.01, group=groupTrading)
+contractSize = input.float(100.0, "Contract Size (oz / lot)", minval=1.0, group=groupTrading, tooltip="XAUUSD: 1 lot = 100 oz. Khối lượng lệnh trên TradingView = Lot × Contract Size (0.01 lot = 1 oz).")
+allowBuy     = input.bool(true, "Allow Buy", group=groupTrading)
+allowSell    = input.bool(true, "Allow Sell", group=groupTrading)
+
+groupForce          = "Force"
+forceLength         = input.int(20, "Force MA Length", minval=1, group=groupForce)
+volumeLength        = input.int(20, "Volume MA Length", minval=1, group=groupForce)
+volumeExplosionMult = input.float(1.5, "Volume Explosion x", minval=0.1, step=0.1, group=groupForce)
+forceExplosionMult  = input.float(1.5, "Force Explosion x", minval=0.1, step=0.1, group=groupForce)
+
+groupTrend = "Short Trend EMA"
+fastLength = input.int(9, "Fast EMA", minval=1, group=groupTrend)
+slowLength = input.int(21, "Slow EMA", minval=1, group=groupTrend)
+slopeBars  = input.int(1, "EMA Slope Bars", minval=1, group=groupTrend)
+
+groupRisk = "Risk Management"
+useSL     = input.bool(false, "Use Stop Loss", group=groupRisk)
+slPoints  = input.float(0.0, "Stop Loss (points)", minval=0.0, group=groupRisk, tooltip="1 point = 1 tick (syminfo.mintick). XAUUSD 2 chữ số: 100 points = $1 giá.")
+useTP     = input.bool(false, "Use Take Profit", group=groupRisk)
+tpPoints  = input.float(0.0, "Take Profit (points)", minval=0.0, group=groupRisk)
+
+groupDisplay = "Display"
+showEMA      = input.bool(true, "Show EMA", group=groupDisplay)
+showPeaks    = input.bool(true, "Show Force Peak (BP / SP)", group=groupDisplay)
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// DATA CHECK
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+cumVolume = ta.cum(nz(volume))
+if barstate.islast and cumVolume == 0
+    runtime.error("Symbol này không có Volume — hãy dùng feed XAUUSD có tick volume (OANDA, FXCM, Pepperstone...).")
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// BUY / SELL FORCE + EXPLOSION
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+barRange  = math.max(high - low, syminfo.mintick)
+buyForce  = volume * (close - low) / barRange
+sellForce = volume * (high - close) / barRange
+
+buyForceMA  = ta.sma(buyForce, forceLength)
+sellForceMA = ta.sma(sellForce, forceLength)
+volumeMA    = ta.sma(volume, volumeLength)
+
+volumeExplosion = volume > volumeMA * volumeExplosionMult
+buyExplosion    = volumeExplosion and buyForce > buyForceMA * forceExplosionMult
+sellExplosion   = volumeExplosion and sellForce > sellForceMA * forceExplosionMult
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// FORCE PEAK
+// Explosion mở theo dõi → Force còn tăng thì nâng đỉnh →
+// nến đầu tiên không vượt đỉnh = Peak xác nhận.
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+var bool  trackingBuy  = false
+var bool  trackingSell = false
+var float buyPeak      = na
+var float sellPeak     = na
+
+bool buyPeakConfirmed  = false
+bool sellPeakConfirmed = false
+
+if trackingBuy
+    if buyForce > buyPeak
+        buyPeak := buyForce
+    else
+        buyPeakConfirmed := true
+        trackingBuy := false
+        buyPeak := na
+else if buyExplosion
+    trackingBuy := true
+    buyPeak := buyForce
+
+if trackingSell
+    if sellForce > sellPeak
+        sellPeak := sellForce
+    else
+        sellPeakConfirmed := true
+        trackingSell := false
+        sellPeak := na
+else if sellExplosion
+    trackingSell := true
+    sellPeak := sellForce
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// EMA 9 / 21 TREND
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+fastEMA = ta.ema(close, fastLength)
+slowEMA = ta.ema(close, slowLength)
+
+bullTrend = fastEMA > slowEMA and fastEMA > fastEMA[slopeBars] and close > fastEMA
+bearTrend = fastEMA < slowEMA and fastEMA < fastEMA[slopeBars] and close < fastEMA
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ENTRY / REVERSAL
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+orderQty         = lotSize * contractSize
+currentDirection = int(math.sign(strategy.position_size))
+
+buySetup  = buyPeakConfirmed and bullTrend and currentDirection != 1
+sellSetup = sellPeakConfirmed and bearTrend and currentDirection != -1
+
+if buySetup
+    if allowBuy
+        strategy.entry("Long", strategy.long, qty=orderQty, comment="BUY")
+    else if currentDirection == -1
+        strategy.close("Short", comment="Close SELL")
+else if sellSetup
+    if allowSell
+        strategy.entry("Short", strategy.short, qty=orderQty, comment="SELL")
+    else if currentDirection == 1
+        strategy.close("Long", comment="Close BUY")
+
+hasExitRule = (useSL and slPoints > 0) or (useTP and tpPoints > 0)
+lossTicks   = useSL and slPoints > 0 ? slPoints : na
+profitTicks = useTP and tpPoints > 0 ? tpPoints : na
+
+if hasExitRule
+    strategy.exit("Exit Long", "Long", loss=lossTicks, profit=profitTicks)
+    strategy.exit("Exit Short", "Short", loss=lossTicks, profit=profitTicks)
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// VISUALS + ALERTS
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+plot(showEMA ? fastEMA : na, "EMA Fast", color=color.orange, linewidth=2)
+plot(showEMA ? slowEMA : na, "EMA Slow", color=color.aqua, linewidth=2)
+
+plotshape(showPeaks and buyPeakConfirmed, "BUY Force Peak", shape.circle, location.belowbar, color.lime, size=size.tiny, text="BP")
+plotshape(showPeaks and sellPeakConfirmed, "SELL Force Peak", shape.circle, location.abovebar, color.red, size=size.tiny, text="SP")
+
+plot(buyForce, "Buy Force", color=color.lime, display=display.data_window)
+plot(sellForce, "Sell Force", color=color.red, display=display.data_window)
+
+alertcondition(buySetup, "BotVolumn2 BUY", "BotVolumn2: BUY {{ticker}} @ {{close}}")
+alertcondition(sellSetup, "BotVolumn2 SELL", "BotVolumn2: SELL {{ticker}} @ {{close}}")
